@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://discussion.local/schemas/discussion-snapshot-v1.schema.json",
+  "title": "Incremental discussion snapshot v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "discussion_id",
+    "status",
+    "progress",
+    "objective",
+    "participants",
+    "graph",
+    "configuration",
+    "rounds",
+    "opinions",
+    "decision_summary",
+    "logs",
+    "conclusion"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "discussion_id": { "type": "string", "minLength": 1 },
+    "status": {
+      "enum": ["created", "preparing", "running", "completed", "failed"]
+    },
+    "progress": {
+      "type": "object",
+      "required": ["current_round", "completed_rounds", "total_rounds"],
+      "properties": {
+        "current_round": { "type": "integer", "minimum": 0 },
+        "completed_rounds": { "type": "integer", "minimum": 0 },
+        "total_rounds": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "participants": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 2,
+      "uniqueItems": true
+    },
+    "graph": {
+      "type": "object",
+      "required": ["agents", "edges", "directed"],
+      "properties": {
+        "agents": { "type": "array", "items": { "type": "string" } },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [{ "type": "string" }, { "type": "string" }],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "directed": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "rounds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["round", "opinions", "messages"],
+        "properties": {
+          "round": { "type": "integer", "minimum": 1 },
+          "opinions": { "type": "array" },
+          "messages": { "type": "array" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "decision_summary": { "type": ["object", "null"] },
+    "conclusion": { "type": ["string", "null"] },
+    "failure": { "type": ["object", "null"] },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["stage", "code", "message"],
+        "properties": {
+          "stage": { "type": "string" },
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "details": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

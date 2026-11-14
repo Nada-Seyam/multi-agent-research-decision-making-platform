@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://discussion.local/schemas/discussion-event-v1.schema.json",
+  "title": "Discussion lifecycle event v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_type",
+    "discussion_id",
+    "sequence",
+    "occurred_at",
+    "snapshot_sha256",
+    "data"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "event_id": { "type": "string", "minLength": 1 },
+    "event_type": {
+      "enum": [
+        "discussion.started",
+        "round.completed",
+        "discussion.completed",
+        "discussion.failed"
+      ]
+    },
+    "discussion_id": { "type": "string", "minLength": 1 },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "snapshot_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "data": {
+      "type": "object",
+      "required": ["discussion"],
+      "properties": {
+        "completed_round": { "type": "integer", "minimum": 1 },
+        "round": { "type": "object" },
+        "discussion": {
+          "$ref": "discussion-snapshot-v1.schema.json"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
