@@ -1,151 +1,151 @@
 # Multi-Agent Research & Decision-Making Platform
 
-A full-stack system in which several AI personas research a decision, debate it over multiple rounds, and converge on a recommendation, while a separate analytics service measures how opinions moved along the way.
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![LangGraph](https://img.shields.io/badge/LangGraph-1C3C3C)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
 
----
+A full-stack platform where specialized AI personas **research a decision together, debate it over multiple structured rounds, and converge on a recommendation**. A separate analytics service tracks how opinions change, align and influence each other as the discussion unfolds, and a React dashboard visualizes the whole process.
 
-## At a glance
+## 🎬 Demo
 
-| | |
-|---|---|
-| **Input** | A decision objective (topic, goal, constraints), typed into the UI or uploaded as a `.txt`/`.md` file |
-| **Process** | Shared evidence research → 3–6 personas → 3–6 structured discussion rounds → decision synthesis → written conclusion |
-| **Output** | Per-round opinion snapshots, a decision summary, an LLM-written conclusion, and analytics (opinion change, agreement, influence, sentiment) |
-| **Stack** | Python · FastAPI · LangGraph · PostgreSQL/pgvector · Hugging Face models · React 18 · TypeScript · Vite · Docker |
+**[▶ Watch the Demo](https://drive.google.com/file/d/1MSNhHy7vnhfH6QE474udO5UZl25D0ktd/view?usp=sharing)**
 
-## Architecture
+## ✨ Key Features
+
+- **Multi-agent discussions.** 3–6 of six specialized personas (for example capability, safety, cost and product perspectives) exchange structured, validated opinions on a directed agent graph.
+- **Shared research with hybrid RAG.** A planner, evidence pool and consolidator build one research dossier for all agents. Retrieval combines dense search (BGE-M3 on pgvector), BM25, rank fusion and a cross-encoder reranker, with web search as a fallback.
+- **Multi-round reasoning and decision synthesis.** 3–6 rounds (default 4) feed a deterministic decision summary with weighted criteria, followed by an LLM-written conclusion.
+- **Session memory.** A rolling summary with LLM compaction carries context across research cycles and runs.
+- **Event-driven analytics.** The discussion API emits lifecycle events; the analytics service processes them idempotently and computes opinion change, pairwise agreement, per-agent influence and sentiment as each round completes.
+- **Interactive React dashboard.** Agent graph with message flow, transcript, round replay, discussion history, analytics charts and a conclusion view.
+- **Reproducible and contract-driven.** Seeded participant selection, persisted snapshots per discussion and JSON Schemas for events and snapshots.
+
+## 🏗️ System Architecture
 
 ```mermaid
 flowchart LR
-    UI["React frontend<br/>(Vite, TypeScript)"] -->|"/api"| P["Discussion engine<br/>(producer API :8001)"]
-    P -->|"research queries"| R["Retrieval service<br/>(RAG :8000)"]
-    R --> DB[("PostgreSQL<br/>+ pgvector")]
-    R -.->|"fallback"| W["Web search"]
-    P --> LLM["OpenAI-compatible<br/>LLM endpoint"]
-    P -->|"lifecycle events"| C["Analytics service<br/>(consumer API :8002)"]
-    P --> FS[("Persisted snapshots<br/>outputs/discussions")]
+    UI["React dashboard"] -->|"REST /api, polling"| API
+
+    subgraph Producer["Discussion API :8001"]
+        API["Discussion engine<br/>rounds, decision, conclusion"]
+        RT["Research toolkit<br/>planner, evidence pool, memory"]
+        API --> RT
+    end
+
+    RT -->|"POST /search"| RAG["Retrieval service :8000<br/>dense + BM25 + rerank"]
+    RAG --> DB[("PostgreSQL + pgvector")]
+    RT -.->|"fallback"| WEB["Web search"]
+    API --> LLM["OpenAI-compatible LLM"]
+    RT --> LLM
+    API -->|"lifecycle events"| AN["Analytics service :8002"]
+    AN -.->|"analysis, served via the API"| API
+    API --> FS[("Snapshots on disk")]
 ```
 
-`main.py` starts the producer and the analytics consumer together; the producer launches the retrieval service as a subprocess and serves the built frontend in the Docker image.
-
-| Component | Location | Responsibility |
-|---|---|---|
-| **Discussion engine** | `services/discussion-engine/discussion/` | FastAPI producer: accepts objectives, runs rounds, synthesizes decisions, writes the conclusion, persists snapshots, emits lifecycle events |
-| **Research toolkit** | `services/discussion-engine/week2/` | Research planner, evidence pool, evidence consolidator, personas, session memory, LLM client |
-| **Retrieval service** | `services/discussion-engine/week2/Tools/RAG/` | Hybrid retrieval API (`/search`, `/health`) |
-| **Analytics service** | `services/analytics/` | FastAPI consumer: ingests events and computes analytics per round and per discussion |
-| **Frontend** | `frontend/` | Objective entry, discussion, analytics, conclusion, history and replay views |
-
-## How a discussion runs
-
-1. **Objective.** The user submits a topic, objective and optional constraints (or uploads an objective file). Rounds default to 4 (allowed range 3–6).
-2. **Shared research.** A planner chooses research queries, an evidence pool resolves each one through retrieval (with query expansion, relevance grading and a source order of `rag,web` by default), and a consolidator turns the evidence into a neutral research dossier with evidence-tier tagging.
-3. **Participants.** 3–6 personas are chosen from the six defined personas, either by seeded random selection (reproducible) or by an explicit roster. A directed agent graph connects them.
-4. **Rounds.** Each round is executed synchronously: every persona receives the dossier and its neighbors' positions and returns a structured opinion, which is parsed, validated and committed.
-5. **Decision synthesis.** Candidate assessments are combined with weighted criteria, with challenger selection and switch assessments, into a deterministic decision summary.
-6. **Conclusion.** A cautious final narrative is generated from the last-round opinion records only.
-7. **Events and analytics.** Lifecycle events (`discussion.started`, `round.completed`, `discussion.completed`, `discussion.failed`) are delivered to the analytics service, which processes them idempotently and exposes per-round and per-discussion analysis.
-
-## Features
-
-- **Persona-driven debate** with structured, validated opinion records instead of free-form chat.
-- **Hybrid retrieval**: dense search (BGE-M3 over pgvector), BM25, reciprocal rank fusion, metadata/similarity/dedup filters and a cross-encoder reranker, with web-search fallback.
-- **Session memory** with rolling-summary compaction across research cycles.
-- **Reproducibility**: seeded participant selection and persisted snapshots per discussion.
-- **Analytics**: opinion change, pairwise agreement, per-agent influence and candidate-directed sentiment (NLI model when only prose is available).
-- **Typed contracts**: JSON Schemas for events and snapshots (`services/discussion-engine/schemas/`) and idempotent event delivery.
-- **Interactive UI**: discussion, analytics and conclusion views, an interaction graph, discussion history and round replay.
-- **Containerized**: multi-stage Dockerfile that builds the frontend and pre-caches pinned model revisions so containers do not download models at startup.
-
-## The six personas
-
-| Persona | Perspective |
+| Component | Role |
 |---|---|
-| Capability Maximizer | Transformer architectures, scaling and maximizing capability under constrained compute |
-| Practical Systems Architect | Reliable, maintainable, efficient, practical-to-deploy systems |
-| Safety and Governance Advocate | Misuse, alignment, accountability and privacy |
-| Product and User Advocate | Solving real problems, accessibility and reliable user value |
-| Cost and Sustainability Analyst | Total cost, resource efficiency, energy use and long-term viability |
-| Strategic Consensus Builder | Synthesizing competing technical perspectives |
+| **Discussion engine** (`services/discussion-engine/discussion/`) | FastAPI producer. Selects participants, builds the agent graph, runs rounds, synthesizes the decision, writes the conclusion, persists snapshots and emits lifecycle events. |
+| **Research toolkit** (`services/discussion-engine/week2/src/`) | Runs in the producer process. Plans queries, resolves evidence (retrieval first, web fallback by default), consolidates the dossier, defines personas and manages session memory. |
+| **Retrieval service** (`services/discussion-engine/week2/Tools/RAG/`) | Separate FastAPI service started by the producer. Serves `POST /search` and `GET /health` over a PostgreSQL/pgvector corpus. |
+| **Analytics service** (`services/analytics/`) | FastAPI consumer. Ingests events and updates a durable per-discussion analysis after each round and at completion. |
+| **Frontend** (`frontend/`) | Submits objectives and polls the API every 1.5–2.5 s while a discussion runs. |
 
-Persona definitions live in `services/discussion-engine/week2/src/configs/Personas.yaml`. They are written for **AI / Transformer-architecture decisions**; using the platform for other domains would mean rewriting them.
+Lifecycle events are `discussion.started`, `round.completed`, `discussion.completed` and `discussion.failed`. The frontend never calls the analytics service directly; analysis is fetched through the discussion API.
 
-## Technology
+## 🧰 Technology Stack
 
-| Area | Technologies |
+| Category | Technologies |
 |---|---|
-| Backend | Python 3.11, FastAPI, Uvicorn, Pydantic v2, pydantic-settings |
-| Agents and LLM | LangGraph, LangChain (core, OpenAI, community), OpenAI SDK against any OpenAI-compatible endpoint |
-| Retrieval | PostgreSQL + pgvector (psycopg2), BGE-M3 embeddings, rank-bm25, cross-encoder reranker (`ms-marco-MiniLM-L-6-v2`), DuckDuckGo web search |
-| Analytics | PyTorch, Transformers, NLI cross-encoder (`nli-deberta-v3-base`) |
-| Frontend | React 18, TypeScript 5, Vite 5, lucide-react |
-| Quality and delivery | pytest, Docker (Node 20 build stage, Python 3.11-slim runtime) |
+| **Backend** | Python 3.11+, FastAPI, Uvicorn, Pydantic v2 |
+| **LLM orchestration** | LangGraph, LangChain, OpenAI SDK (any OpenAI-compatible endpoint) |
+| **Retrieval** | PostgreSQL + pgvector, BGE-M3, rank-bm25, cross-encoder reranker (`ms-marco-MiniLM-L-6-v2`), DuckDuckGo search |
+| **Analytics / NLP** | PyTorch, Transformers, NLI cross-encoder (`nli-deberta-v3-base`) |
+| **Frontend** | React 18, TypeScript, Vite |
+| **Tooling** | pytest, Docker (multi-stage build with pre-cached models) |
 
-## Repository layout
+## ⚙️ How It Works
+
+1. **Submit an objective.** Enter a topic, objective and constraints in the UI, or upload a `.txt`/`.md` file. Choose 3–6 rounds and 3–6 participants (random seeded or an explicit roster).
+2. **Research.** The planner creates queries, the evidence pool resolves them (query expansion, relevance grading, retrieval then web fallback) and the consolidator produces one shared dossier.
+3. **Seat the agents.** The selected personas are placed on a directed agent graph.
+4. **Debate in rounds.** Each agent reads the dossier, its memory context and its neighbors' positions, then returns a structured opinion that is validated and committed. A snapshot is saved after each round.
+5. **Decide and conclude.** After the final round the engine synthesizes a deterministic decision summary, then generates the written conclusion.
+6. **Analyze.** Lifecycle events reach the analytics service, which computes opinion change, agreement, influence and sentiment. Analytics become available after round one.
+7. **Review.** The dashboard shows the transcript, agent graph, analytics and conclusion, and keeps a history with round replay.
+
+## 📁 Project Structure
 
 ```
 .
-├── main.py                  Unified launcher (producer + analytics consumer)
-├── Dockerfile               Multi-stage build (frontend, backend, cached models)
-├── requirements.txt         Python dependencies
-├── frontend/                React single-page app
+├── main.py                      # Launcher: analytics service + discussion API
+├── Dockerfile                   # Multi-stage build: frontend, backend, cached models
+├── requirements.txt
+├── frontend/                    # React + TypeScript + Vite dashboard
+│   └── src/
+│       └── analytics/           # Charts, analytics view, interaction graph
 ├── services/
-│   ├── discussion-engine/   Producer API, research toolkit, retrieval service, schemas
-│   └── analytics/           Analytics consumer API
-├── scripts/                 Model-caching scripts used by the Dockerfile
-├── tests/                   Launcher tests
+│   ├── discussion-engine/
+│   │   ├── discussion/          # Producer API, orchestration, decision, conclusion, events
+│   │   ├── schemas/             # JSON Schemas for events and snapshots
+│   │   ├── tests/
+│   │   └── week2/               # Research toolkit (historical folder name)
+│   │       ├── src/             # agents/, configs/ (Personas.yaml), helper/
+│   │       ├── Tools/
+│   │       │   ├── RAG/         # Retrieval service: api/, retrieval/, helper/
+│   │       │   └── Web_Serach/  # Web-search fallback (name kept to preserve imports)
+│   │       └── tests/
+│   └── analytics/
+│       ├── src/analytics/       # Ingestion, agreement, influence, sentiment, opinion change
+│       └── tests/
+├── scripts/                     # Model-cache scripts used by the Docker build
+├── tests/                       # Launcher tests
 └── docs/
-    └── platform-reference.md   Detailed API, configuration and troubleshooting reference
+    └── platform-reference.md    # API, environment variables, deployment, troubleshooting
 ```
 
-## Getting started
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- Python 3.11+ and Node.js 18+ (the Docker build uses Node 20).
-- An API key for an **OpenAI-compatible LLM endpoint**. The example configuration points at `https://ollama.com/v1`; set `LLM_BASE_URL`, `LLM_MODEL` and `API_KEY` for your provider.
-- **A PostgreSQL database with pgvector and a pre-embedded document corpus.** The retrieval service reads from it, and the API returns `503 rag_warming_up` for new discussions until retrieval is ready. **This repository does not include the database schema, ingestion scripts or corpus**, so a fresh clone cannot run a full discussion until you provide one. The connection settings are in `services/discussion-engine/week2/Tools/RAG/helper/.env.example`.
-- Enough disk space and bandwidth to download the embedding, reranker and NLI models on first use.
+- Python 3.11+ and Node.js 18+ (the Docker build uses Node 20)
+- An API key for an OpenAI-compatible LLM endpoint
+- A PostgreSQL database with pgvector and a pre-embedded document corpus (schema, ingestion scripts and corpus are not included in this repository)
+- Disk space and bandwidth for the embedding, reranker and NLI models on first use
 
 ### Install
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate            # Windows PowerShell: .venv\Scripts\Activate.ps1
+source .venv/bin/activate        # Windows PowerShell: .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt -r services/analytics/requirements.txt
 ```
 
 ### Configure
 
-Copy each template and fill in your values:
+Copy each template and fill in your values. Real `.env` files are git-ignored.
 
 | Template | Copy to |
 |---|---|
 | `services/discussion-engine/.env.example` | `services/discussion-engine/.env` |
-| `services/discussion-engine/week2/src/.env.example` | `services/discussion-engine/week2/src/.env` |
-| `services/discussion-engine/week2/Tools/RAG/helper/.env.example` | `services/discussion-engine/week2/Tools/RAG/helper/.env` |
+| `services/discussion-engine/week2/src/.env.example` | `services/discussion-engine/week2/src/.env` (LLM: `LLM_BASE_URL`, `LLM_MODEL`, `API_KEY`) |
+| `services/discussion-engine/week2/Tools/RAG/helper/.env.example` | `services/discussion-engine/week2/Tools/RAG/helper/.env` (database connection) |
 | `services/analytics/.env.example` | environment variables (see the file) |
-
-Never commit real `.env` files; they are git-ignored.
 
 ### Run
 
 ```bash
-python main.py                       # starts the analytics consumer, producer and retrieval service
+python main.py
 ```
 
-| Service | URL |
-|---|---|
-| Retrieval service | http://127.0.0.1:8000 |
-| Discussion API docs | http://127.0.0.1:8001/docs |
-| Analytics API docs | http://127.0.0.1:8002/docs |
-
-In a second terminal:
+This starts the analytics service (`:8002`) and the discussion API (`:8001`); the API starts the retrieval service (`:8000`). Interactive docs are at `http://127.0.0.1:8001/docs` and `http://127.0.0.1:8002/docs`. In a second terminal:
 
 ```bash
 cd frontend
 npm install
-npm run dev                          # http://127.0.0.1:5173, proxies /api to :8001
+npm run dev                      # http://127.0.0.1:5173, proxies /api to :8001
 ```
 
 ### Docker
@@ -155,39 +155,14 @@ docker build -t decision-platform-backend .
 docker run -p 8001:8001 --env-file .env decision-platform-backend
 ```
 
-The image bakes in the built frontend, which the producer serves at `/`. See [docs/platform-reference.md](docs/platform-reference.md) for details.
+The image serves the built frontend at `/` on port 8001. Environment variables, API endpoints and troubleshooting are documented in [docs/platform-reference.md](docs/platform-reference.md).
 
-## Testing
+## 🧪 Testing
 
 ```bash
 python -m pytest tests -q                                            # launcher
 (cd services/analytics && python -m pytest tests -q)                 # analytics
 (cd services/discussion-engine && python -m pytest tests -q)         # discussion engine
-(cd services/discussion-engine && python -m pytest week2/tests -q)   # research toolkit and retrieval
+(cd services/discussion-engine && python -m pytest week2/tests -q)   # research toolkit, retrieval
+(cd frontend && npm run build)                                       # TypeScript check + build
 ```
-
-There are no frontend tests.
-
-## Known limitations
-
-- The retrieval database and corpus are not included (see Prerequisites).
-- The personas are specific to AI / Transformer-architecture decisions.
-- `services/analytics/tests/test_influence.py` imports `_tfidf_relevance_scores`, which does not exist in `analytics/influence.py`, so that test file fails at collection.
-- Two tests (`test_upload_is_queued_for_background_execution`) need working LLM credentials and network access.
-- The `Tools/Web_Serach` folder name is a historical typo that is kept so existing imports keep working.
-
-## Documentation
-
-- [Platform reference](docs/platform-reference.md): endpoints, environment variables, deployment and troubleshooting
-- [Discussion engine](services/discussion-engine/README.md)
-- [Analytics service](services/analytics/README.md)
-
-## Acknowledgments
-
-This project was developed collaboratively.
-
-It builds on open-source software and models, including FastAPI, LangGraph, LangChain, PyTorch, Hugging Face Transformers and Sentence-Transformers, React and Vite, the `BAAI/bge-m3` embedding model, the `cross-encoder/ms-marco-MiniLM-L-6-v2` reranker and the `cross-encoder/nli-deberta-v3-base` NLI model. Each is subject to its own license.
-
-## License
-
-No license has been selected yet. Until one is added, all rights are reserved by the authors.
