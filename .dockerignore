@@ -1,0 +1,11 @@
+outputs/
+logs/
+node_modules/
+.git/
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+__pycache__/
+*.pyc
+.venv/
+.env
