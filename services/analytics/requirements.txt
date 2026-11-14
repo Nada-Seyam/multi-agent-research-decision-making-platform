@@ -1,0 +1,6 @@
+pytest==8.3.3
+torch==2.5.1
+transformers==4.48.3
+sentencepiece==0.2.0
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
